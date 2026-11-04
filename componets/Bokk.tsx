@@ -93,15 +93,20 @@ export default function Book() {
     if (!bookRef.current) return;
 
     const pageFlip = new PageFlip(bookRef.current, {
-      width: 400,
-      height: 500,
-      autoSize: false,
-      showCover: true,
-      drawShadow: true,
-      maxShadowOpacity: 0.5,
-      usePortrait: false,
-      startPage: 0,
-    });
+  width: 600,
+  height: 500,
+  size: "stretch",
+  minWidth: 280,
+  maxWidth: 600,
+  minHeight: 230,
+  maxHeight: 500,
+  autoSize: true,
+  showCover: true,
+  drawShadow: true,
+  maxShadowOpacity: 0.5,
+  usePortrait: false, // IMPORTANT: horizontal spread
+  startPage: 0,
+});
 
     // const pages = bookRef.current.querySelectorAll(".book-page");
     pageFlip.loadFromHTML(bookRef.current.querySelectorAll(".book-page"));
