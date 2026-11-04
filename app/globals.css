@@ -135,10 +135,17 @@
     @apply font-sans;
   }
 }
-
 html,
 body {
-  background-color: #000000 !important;
-  color: #ffffff !important;
-  min-height: 100%;
+  background: #000 !important;
+}
+
+body {
+  color: white !important;
+}
+
+#__next,
+main {
+  background: #000 !important;
+}
 }
