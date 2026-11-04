@@ -138,14 +138,10 @@
 html,
 body {
   background: #000 !important;
+  color: #fff !important;
+  min-height: 100%;
 }
 
-body {
-  color: white !important;
-}
-
-#__next,
 main {
   background: #000 !important;
-}
 }
