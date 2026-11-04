@@ -112,7 +112,7 @@ export default function Book() {
   }, []);
 
   return (
-    <div ref={bookRef}>
+    <div ref={bookRef} className="book-stage">
       {/* Front Cover */}
       <div
         className="book-page bg-blue-700 text-white"
