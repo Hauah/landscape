@@ -92,6 +92,29 @@ export default function Book() {
   const hasStarted = useRef(false);
   const [lyricIndex, setLyricIndex] = useState(0);
   const [lyricVisible, setLyricVisible] = useState(true);
+  const [bookScale, setBookScale] = useState(1);
+
+  // Scale the complete scrapbook in landscape; preserve original portrait size.
+  useEffect(() => {
+    const resizeBook = () => {
+      if (window.matchMedia("(orientation: landscape)").matches) {
+        const scaleX = (window.innerWidth - 24) / 1200;
+        const scaleY = (window.innerHeight - 24) / 500;
+        setBookScale(Math.min(scaleX, scaleY, 1));
+      } else {
+        setBookScale(1);
+      }
+    };
+
+    resizeBook();
+    window.addEventListener("resize", resizeBook);
+    window.addEventListener("orientationchange", resizeBook);
+
+    return () => {
+      window.removeEventListener("resize", resizeBook);
+      window.removeEventListener("orientationchange", resizeBook);
+    };
+  }, []);
   // Each line starts at this audio timestamp (seconds). Adjust these to your MP3.
   const lyrics = [
     {text : "ㅤ", at: 0 },
@@ -144,8 +167,16 @@ export default function Book() {
   useEffect(() => {
     if (!bookRef.current) return;
 
+    const isMobile = window.innerWidth < 768;
+
+const pageWidth = isMobile
+  ? Math.min(180, (window.innerWidth - 24) / 2)
+  : 400;
+
+const pageHeight = pageWidth * 1.25;
+
     const pageFlip = new PageFlip(bookRef.current, {
-      width: 400,
+      width: 600,
       height: 500,
       autoSize: false,
       showCover: true,
@@ -166,7 +197,14 @@ export default function Book() {
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
       {/* PageFlip container: only scrapbook pages go inside this div */}
-      <div ref={bookRef} className="book-stage">
+      <div
+  ref={bookRef}
+  className="book-stage"
+  style={{
+    transform: `scale(${bookScale})`,
+    transformOrigin: "center center",
+  }}
+>
       {/* Front Cover */}
       <div
         className="book-page bg-blue-700 text-white"
