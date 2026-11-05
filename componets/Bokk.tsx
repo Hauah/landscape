@@ -1,7 +1,7 @@
 // "use client";
 // import React from "react";
 // import { PageFlip } from "page-flip";
-// import { useEffect, useRef } from "react";
+// import { useEffect, useRef, useState } from "react";
 
 // const Book = () => {
 //   const bookref = useRef<HTMLDivElement>(null);
@@ -80,7 +80,7 @@
 
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageFlip } from "page-flip";
 import Image from "next/image";
 import Draggable from "react-draggable";
@@ -88,6 +88,58 @@ import DraggableItem from "./DragItem";
 
 export default function Book() {
   const bookRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const hasStarted = useRef(false);
+  const [lyricIndex, setLyricIndex] = useState(0);
+  const [lyricVisible, setLyricVisible] = useState(true);
+  // Each line starts at this audio timestamp (seconds). Adjust these to your MP3.
+  const lyrics = [
+    {text : "ㅤ", at: 0 },
+    {text: "I wanna be your", at: 0.1 },
+    { text: "Secrets I have held in my heart", at: 3 },
+    { text: "Are harder to hide than I thought", at: 7 },
+    { text: "Maybe I just wanna be yours", at: 10 },
+    { text: "I wanna be yours, I wanna be yours", at: 13 },
+    { text: "Wanna be yours, wanna be yours, wanna be yours", at: 19 },
+    { text: "Wanna be yours..", at: 29 },
+    { text: "Wanna be yours...", at: 33 },
+    { text: "Wanna be yours....", at: 37 }
+  ];
+
+  // Lyrics follow the audio's currentTime, not a free-running interval.
+  const syncLyricsToAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    let nextIndex = 0;
+    for (let i = 0; i < lyrics.length; i++) {
+      if (audio.currentTime >= lyrics[i].at) nextIndex = i;
+    }
+    setLyricIndex((current) => {
+      if (current !== nextIndex) {
+        setLyricVisible(false);
+        window.setTimeout(() => setLyricVisible(true), 180);
+      }
+      return nextIndex;
+    });
+  };
+
+  // Start music on the first screen tap only; later taps won't pause it.
+  useEffect(() => {
+    const startMusic = () => {
+      if (hasStarted.current || !audioRef.current) return;
+      audioRef.current.play().then(() => {
+        hasStarted.current = true;
+      }).catch(() => {
+        // Browser may block playback until another user interaction.
+      });
+    };
+    document.addEventListener("click", startMusic);
+    document.addEventListener("touchstart", startMusic, { passive: true });
+    return () => {
+      document.removeEventListener("click", startMusic);
+      document.removeEventListener("touchstart", startMusic);
+    };
+  }, []);
 
   useEffect(() => {
     if (!bookRef.current) return;
@@ -112,7 +164,9 @@ export default function Book() {
   }, []);
 
   return (
-    <div ref={bookRef} className="book-stage">
+    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
+      {/* PageFlip container: only scrapbook pages go inside this div */}
+      <div ref={bookRef} className="book-stage">
       {/* Front Cover */}
       <div
         className="book-page bg-blue-700 text-white"
@@ -682,6 +736,35 @@ export default function Book() {
           draggable={false}
           className="object-contain scale-130 translate-x-3 pointer-events-none select-none"
         ></Image>
+      </div>
+      </div> {/* Close PageFlip book-stage BEFORE audio and lyrics */}
+
+      {/* Hidden music: starts on first tap anywhere; no pause controls */}
+      <audio
+        ref={audioRef}
+        loop
+        preload="auto"
+        src="/songs/i-wanna-be-yours.mp3"
+        onTimeUpdate={syncLyricsToAudio}
+      />
+
+      {/* Floating lyrics — no card/box or song title; animated lyric only */}
+      <div className="fixed bottom-8 left-0 right-0 z-[9999] px-5 text-center pointer-events-none">
+        <p
+          key={lyricIndex}
+          aria-live="polite"
+          className={`mx-auto max-w-3xl text-xl sm:text-2xl md:text-3xl font-semibold italic tracking-wide text-white transition-all duration-700 ease-out ${
+            lyricVisible
+              ? "translate-y-0 scale-100 opacity-100"
+              : "-translate-y-3 scale-95 opacity-0"
+          }`}
+          style={{
+            textShadow: "0 0 8px #ff4fa3, 0 0 18px #ff4fa3, 0 2px 5px rgba(0,0,0,.8)",
+            WebkitTextStroke: "0.25px rgba(255,255,255,.35)",
+          }}
+        >
+          {lyrics[lyricIndex].text}
+        </p>
       </div>
     </div>
   );
