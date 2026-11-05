@@ -86,7 +86,30 @@ import Image from "next/image";
 import Draggable from "react-draggable";
 import DraggableItem from "./DragItem";
 
+// ---- Landscape "PC feel" stage -------------------------------------------
+// The whole diary lives on a fixed-size desktop stage (STAGE_W x STAGE_H).
+// That stage is scaled to fit any screen, and on a phone held in portrait it
+// is also rotated 90deg so the diary always looks horizontal.
+const BOOK_W = 800; // two pages of 400
+const BOOK_H = 500;
+const STAGE_W = 880;
+const STAGE_H = 570;
+const MAX_SCALE = 1.6;
+
+type Layout = { scale: number; rotated: boolean; ready: boolean };
+
 export default function Book() {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const pageFlipRef = useRef<PageFlip | null>(null);
+  const [layout, setLayout] = useState<Layout>({
+    scale: 1,
+    rotated: false,
+    ready: false,
+  });
+  // Mirror of `layout` for use inside the PageFlip pointer patch below.
+  const layoutRef = useRef<Layout>(layout);
+  layoutRef.current = layout;
+
   const bookRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const hasStarted = useRef(false);
@@ -123,6 +146,40 @@ export default function Book() {
     });
   };
 
+  // Fit + rotate the stage to the screen.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const vw = el.clientWidth;
+      const vh = el.clientHeight;
+      if (!vw || !vh) return;
+      // Phone/tablet held upright -> turn the diary sideways.
+      // Narrow screens OR touch devices (covers "Desktop site" mode, where the
+      // reported width is ~980px even on a phone).
+      const isTouch = window.matchMedia("(pointer: coarse)").matches;
+      const rotated = vh > vw && (vw < 768 || isTouch);
+      const availW = rotated ? vh : vw;
+      const availH = rotated ? vw : vh;
+      const scale = Math.min(availW / STAGE_W, availH / STAGE_H, MAX_SCALE);
+      setLayout((prev) =>
+        prev.ready && prev.rotated === rotated && Math.abs(prev.scale - scale) < 0.001
+          ? prev
+          : { scale, rotated, ready: true }
+      );
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+
   // Start music on the first screen tap only; later taps won't pause it.
   useEffect(() => {
     const startMusic = () => {
@@ -157,16 +214,71 @@ export default function Book() {
 
     // const pages = bookRef.current.querySelectorAll(".book-page");
     pageFlip.loadFromHTML(bookRef.current.querySelectorAll(".book-page"));
+    pageFlipRef.current = pageFlip;
+
+    // PageFlip converts finger/mouse position with getBoundingClientRect(),
+    // which is wrong once the book is CSS-scaled or rotated. Replace it with a
+    // version that undoes our scale + 90deg rotation so dragging pages still
+    // follows the finger exactly.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ui: any = (pageFlip as any).getUI?.();
+    if (ui && typeof ui.getMousePos === "function") {
+      ui.getMousePos = (x: number, y: number) => {
+        const el: HTMLElement = ui.distElement ?? bookRef.current;
+        const { scale: s, rotated } = layoutRef.current;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const w = el.offsetWidth || BOOK_W;
+        const h = el.offsetHeight || BOOK_H;
+        return rotated
+          ? { x: w / 2 + (y - cy) / s, y: h / 2 - (x - cx) / s }
+          : { x: w / 2 + (x - cx) / s, y: h / 2 + (y - cy) / s };
+      };
+    }
 
     return () => {
+      pageFlipRef.current = null;
       pageFlip.destroy();
     };
   }, []);
 
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden">
+    <div
+      ref={viewportRef}
+      className="fixed inset-0 overflow-hidden bg-black select-none"
+      style={{ touchAction: "none" }}
+    >
+      {/* Fixed-size desktop stage: scaled to fit, rotated on portrait phones */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: STAGE_W,
+          height: STAGE_H,
+          marginLeft: -STAGE_W / 2,
+          marginTop: -STAGE_H / 2,
+          transform: `rotate(${layout.rotated ? 90 : 0}deg) scale(${layout.scale})`,
+          transformOrigin: "50% 50%",
+          visibility: layout.ready ? "visible" : "hidden",
+        }}
+      >
+      <div
+        style={{
+          position: "absolute",
+          left: (STAGE_W - BOOK_W) / 2,
+          top: 12,
+          width: BOOK_W,
+          height: BOOK_H,
+        }}
+      >
       {/* PageFlip container: only scrapbook pages go inside this div */}
-      <div ref={bookRef} className="book-stage">
+      <div
+        ref={bookRef}
+        className="book-stage"
+        style={{ width: BOOK_W, height: BOOK_H }}
+      >
       {/* Front Cover */}
       <div
         className="book-page bg-blue-700 text-white"
@@ -738,6 +850,25 @@ export default function Book() {
         ></Image>
       </div>
       </div> {/* Close PageFlip book-stage BEFORE audio and lyrics */}
+      </div>
+
+      {/* Tap arrows: easy page turning on touch screens */}
+      <button
+        type="button"
+        aria-label="Previous page"
+        onClick={() => pageFlipRef.current?.flipPrev()}
+        className="absolute left-1 top-1/2 -translate-y-1/2 px-2 py-6 text-4xl leading-none text-white/40 active:text-white/90"
+      >
+        ‹
+      </button>
+      <button
+        type="button"
+        aria-label="Next page"
+        onClick={() => pageFlipRef.current?.flipNext()}
+        className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-6 text-4xl leading-none text-white/40 active:text-white/90"
+      >
+        ›
+      </button>
 
       {/* Hidden music: starts on first tap anywhere; no pause controls */}
       <audio
@@ -749,11 +880,11 @@ export default function Book() {
       />
 
       {/* Floating lyrics — no card/box or song title; animated lyric only */}
-      <div className="fixed bottom-8 left-0 right-0 z-[9999] px-5 text-center pointer-events-none">
+      <div className="absolute bottom-2 left-0 right-0 z-[9999] px-5 text-center pointer-events-none">
         <p
           key={lyricIndex}
           aria-live="polite"
-          className={`mx-auto max-w-3xl text-xl sm:text-2xl md:text-3xl font-semibold italic tracking-wide text-white transition-all duration-700 ease-out ${
+          className={`mx-auto max-w-3xl text-2xl font-semibold italic tracking-wide text-white transition-all duration-700 ease-out ${
             lyricVisible
               ? "translate-y-0 scale-100 opacity-100"
               : "-translate-y-3 scale-95 opacity-0"
@@ -765,6 +896,7 @@ export default function Book() {
         >
           {lyrics[lyricIndex].text}
         </p>
+      </div>
       </div>
     </div>
   );
